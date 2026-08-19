@@ -1,0 +1,33 @@
+name: Sync upstream main
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream-main
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    if: github.repository == 'tzraeq/opencodex'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out automation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Fetch upstream main
+        run: |
+          git remote add source https://github.com/lidge-jun/opencodex.git
+          git fetch --depth=1 --no-tags source main
+
+      - name: Force-sync fork main
+        run: git push --force origin FETCH_HEAD:refs/heads/main
