@@ -19,15 +19,16 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: Check out automation branch
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - name: Fetch upstream main
+      # GITHUB_TOKEN cannot push commits that modify workflow files. This fork API
+      # performs the fast-forward server-side with the narrower contents permission.
+      - name: Fast-forward fork main from upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          git remote add source https://github.com/lidge-jun/opencodex.git
-          git fetch --depth=1 --no-tags source main
-
-      - name: Force-sync fork main
-        run: git push --force origin FETCH_HEAD:refs/heads/main
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --url "https://api.github.com/repos/${GITHUB_REPOSITORY}/merge-upstream" \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            --data '{"branch":"main"}'
