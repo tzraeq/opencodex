@@ -150,6 +150,28 @@ describe("opencodex config defaults", () => {
     });
   });
 
+  test("top-level model aliases preserve slash-containing targets and reject malformed writes", () => {
+    const defaults = getDefaultConfig();
+    expect(validateConfigCandidate({
+      ...defaults,
+      modelAliases: { moonshot: "nvidia/moonshotai/kimi-k2.6" },
+    })).toMatchObject({
+      ok: true,
+      config: { modelAliases: { moonshot: "nvidia/moonshotai/kimi-k2.6" } },
+    });
+
+    for (const modelAliases of [
+      [],
+      { "bad/name": "nvidia/model" },
+      { friendly: "missing-provider-separator" },
+      { friendly: 42 },
+      { constructor: "nvidia/model" },
+      JSON.parse('{"__proto__":"nvidia/model"}'),
+    ]) {
+      expect(validateConfigCandidate({ ...defaults, modelAliases })).toMatchObject({ ok: false });
+    }
+  });
+
   test("usage and MCP config overrides change the effective bound while defaults remain compatible", () => {
     const defaults = getDefaultConfig();
     expect(defaults.managementUsageMaxReadBytes).toBe(64 * 1024 * 1024);

@@ -36,6 +36,7 @@ import {
 import { getRoutingProfile, resolvePolicyProfileId } from "./routing/profile";
 import { evaluatePolicyProfile, type PolicyRequestEvidence } from "./routing/evaluator";
 import { assemblePolicyCandidateEvidence } from "./routing/compatibility/assemble";
+import { resolveGlobalModelAlias } from "./routing/model-aliases";
 
 export class NoEligiblePolicyCandidateError extends Error {
   /** Evaluation trace (with per-candidate exclusions) when nothing qualified. */
@@ -595,6 +596,19 @@ function routeModelInternal(
       // consulting combo aliases again, otherwise an alias that shadows the target can recurse.
       const routed = routeModelInternal(config, concrete, true, undefined);
       return { ...routed, combo, routeKind: "combo" as const, routeReason: "combo-pick" };
+    }
+  }
+
+  if (!bypassCombos) {
+    const alias = resolveGlobalModelAlias(config, modelId);
+    if (alias) {
+      return routeResult(
+        alias.providerName,
+        alias.provider,
+        alias.modelId,
+        "explicit-provider",
+        "global-model-alias",
+      );
     }
   }
 

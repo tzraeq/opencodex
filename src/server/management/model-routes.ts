@@ -148,6 +148,8 @@ import type { MetricUnavailableReason, TokPerSecondResult, CostEstimateReason, C
 import type { ManagementContext } from "./context";
 import { listManagementModelRows, loadExportModels } from "./model-rows";
 import { readManagementJsonBody, rethrowManagementBodyTooLarge } from "./body";
+import { validateGlobalModelAliases } from "../../routing/model-aliases";
+import { redactSecretString } from "../../lib/redact";
 
 /**
  * Counts read back off the SERIALIZED document rather than recomputed from the input rows.
@@ -186,6 +188,36 @@ export async function handleModelRoutes(ctx: ManagementContext): Promise<Respons
 
   if (url.pathname === "/api/models" && req.method === "GET") {
     return jsonResponse(await listManagementModelRows(config));
+  }
+
+  if (url.pathname === "/api/model-aliases" && req.method === "GET") {
+    return jsonResponse({ aliases: { ...(config.modelAliases ?? {}) } });
+  }
+
+  if (url.pathname === "/api/model-aliases" && req.method === "PUT") {
+    let parsedBody: unknown;
+    try {
+      parsedBody = await readManagementJsonBody(req);
+    } catch (error) {
+      rethrowManagementBodyTooLarge(error);
+      return jsonResponse({ error: "invalid JSON body" }, 400);
+    }
+    if (!isPlainRecord(parsedBody)) return jsonResponse({ error: "invalid model aliases request" }, 400);
+    const validated = validateGlobalModelAliases(parsedBody.aliases, config.providers);
+    if (!validated.ok) return jsonResponse({ error: redactSecretString(validated.error) }, 400);
+
+    const hadAliases = Object.hasOwn(config, "modelAliases");
+    const previousAliases = config.modelAliases;
+    if (Object.keys(validated.aliases).length === 0) delete config.modelAliases;
+    else config.modelAliases = validated.aliases;
+    try {
+      persistConfig(config);
+    } catch (error) {
+      if (hadAliases) config.modelAliases = previousAliases;
+      else delete config.modelAliases;
+      throw error;
+    }
+    return jsonResponse({ ok: true, aliases: { ...(config.modelAliases ?? {}) } });
   }
 
   /**

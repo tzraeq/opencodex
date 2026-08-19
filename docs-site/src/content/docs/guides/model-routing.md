@@ -15,7 +15,10 @@ through to one another.
 
 ## Precedence
 
-1. **Exact Codex account selector** — if the id is
+1. **Routing policy id or alias** — an explicit `policy/<id>` selector or configured routing-profile
+   alias evaluates that profile and routes its selected concrete candidate.
+
+2. **Exact Codex account selector** — if the id is
    `<selector>/<native-openai-model>` and the selector is configured in `codexAccountNamespaces`,
    the request uses only the mapped stored account and sends the bare native model upstream.
    Unavailable exact targets fail closed instead of continuing through Pool, Direct, or provider
@@ -25,12 +28,30 @@ through to one another.
    side/gpt-5.6-sol → provider "openai", model "gpt-5.6-sol", account selector "side"
    ```
 
-2. **Combo id or alias** — while at least one combo is configured, a canonical `combo/<id>` or
+3. **Combo id or alias** — while at least one combo is configured, a canonical `combo/<id>` or
    configured combo alias selects its concrete target before provider namespaces are checked. With
    no configured combos, a legacy physical provider literally named `combo` remains a normal
    provider namespace. See [Combos](/guides/combos/) for target selection and failover behavior.
 
-3. **Explicit `provider/model`** — if the id contains `/` and the part before it is the name of a
+4. **Global model alias** — a bare id in top-level `modelAliases` resolves directly to its
+   `provider/model` target. Combo aliases win when both use the same public id. The target provider
+   must exist and be enabled; otherwise routing fails instead of falling through.
+
+   ```json
+   {
+     "modelAliases": {
+       "gpt-5.6-sol": "acode/kimi-k3",
+       "moonshot": "nvidia/moonshotai/kimi-k2.6"
+     }
+   }
+   ```
+
+   Only the first slash separates the provider, so the upstream model id may contain more slashes.
+   Resolution is one hop: the target is not looked up as another alias. Aliases are global only;
+   fields named `providers.<name>.modelAliases` are ignored. Alias names cannot contain whitespace
+   or slashes, and the reserved object keys `__proto__`, `prototype`, and `constructor` are rejected.
+
+5. **Explicit `provider/model`** — if the id contains `/` and the part before it is the name of a
    configured provider, that provider is used and the id is stripped to the part after the slash.
 
    ```text
@@ -40,16 +61,16 @@ through to one another.
    ```
 
    This is the explicit routed-provider form, and the one Codex's model picker uses for routed
-   models. If the same public id is a configured combo alias, rule 2 wins. If the named provider is
+   models. If the same public id is a configured combo alias, rule 3 wins. If the named provider is
    disabled, this explicit form throws instead of routing.
 
-4. **Bare native OpenAI-family id** — an id such as `gpt-*`, `o1-*`, `o3-*`, or `o4-*` uses the
+6. **Bare native OpenAI-family id** — an id such as `gpt-*`, `o1-*`, `o3-*`, or `o4-*` uses the
    canonical enabled `openai` provider and its configured Pool or Direct account mode.
 
-5. **A provider's `defaultModel`** — if any provider's `defaultModel` equals the id, that provider
+7. **A provider's `defaultModel`** — if any provider's `defaultModel` equals the id, that provider
    is used (id passed through unchanged).
 
-6. **Built-in prefix patterns** — the id is matched against known model-family prefixes, then routed
+8. **Built-in prefix patterns** — the id is matched against known model-family prefixes, then routed
    to a configured provider of that name (or name-prefix):
 
    | Prefixes | Provider |
@@ -60,11 +81,11 @@ through to one another.
    This matcher is name-based and, unlike the `defaultModel` / `models[]` scans, currently does not
    filter a matching provider whose `disabled` flag is true.
 
-7. **A provider's `models[]`** — if no prefix rule won and an active provider lists the id in its
-   `models[]`, that provider is used. Rule 4 already sends a bare `gpt-*` id to the canonical enabled
+9. **A provider's `models[]`** — if no prefix rule won and an active provider lists the id in its
+   `models[]`, that provider is used. Rule 6 already sends a bare `gpt-*` id to the canonical enabled
    `openai` provider before another provider's `models[]` claim can match.
 
-8. **Default provider** — if nothing matched, the id is sent to `config.defaultProvider` unchanged.
+10. **Default provider** — if nothing matched, the id is sent to `config.defaultProvider` unchanged.
    (If no default provider is configured, or it is disabled, routing throws.)
 
 ## API keys and environment variables
@@ -101,14 +122,21 @@ Routing and catalog visibility are separate controls:
 }
 ```
 
+## Editing aliases without a restart
+
+The Models page edits the same top-level map through `GET /api/model-aliases` and
+`PUT /api/model-aliases`. PUT accepts `{ "aliases": { ... } }` and replaces the complete map.
+The running proxy mutates its shared config object after validation and persists it, so the next
+request uses the new mapping. No catalog refresh or proxy/Codex restart is required.
+
 ## Tips
 
-- **Target a Codex account explicitly** with `<selector>/<native-openai-model>` (rule 1). That route
+- **Target a Codex account explicitly** with `<selector>/<native-openai-model>` (rule 2). That route
   is exact and fails closed; it never silently switches to another account.
-- **Be explicit for routed models.** Prefer `provider/model` (rule 3) when that exact public id is
+- **Be explicit for routed models.** Prefer `provider/model` (rule 5) when that exact public id is
   not a combo alias. It directly names the provider and matches what Codex shows in its picker after
   a catalog sync.
-- **Seed `models[]` or `defaultModel`** on a provider so short ids (rules 5/7) resolve without the
+- **Seed `models[]` or `defaultModel`** on a provider so short ids (rules 7/9) resolve without the
   `provider/` prefix.
 - **Prefix patterns are a convenience**, not a guarantee: they only resolve if a provider with that
   name (e.g. `anthropic` or `groq`) is actually configured.

@@ -613,3 +613,103 @@ describe("routeModel backfills google wire mode from the registry", () => {
     expect(routed.providerName).toBe("fallbackProvider");
   });
 });
+
+describe("routeModel global model aliases", () => {
+  function aliasConfig(): OcxConfig {
+    return {
+      port: 10100,
+      defaultProvider: "openai",
+      providers: {
+        openai: {
+          adapter: "openai-responses",
+          baseUrl: "https://chatgpt.com/backend-api/codex",
+        },
+        acode: {
+          adapter: "openai-chat",
+          baseUrl: "https://api.acode.example/v1",
+        },
+        secondary: {
+          adapter: "openai-chat",
+          baseUrl: "https://api.secondary.example/v1",
+        },
+      },
+    };
+  }
+
+  test("overrides bare native routing and records a stable trace reason", () => {
+    const config = aliasConfig();
+    config.modelAliases = { "gpt-5.6-sol": "acode/kimi-k3" };
+
+    expect(routeModel(config, "gpt-5.6-sol")).toMatchObject({
+      providerName: "acode",
+      modelId: "kimi-k3",
+      routeKind: "explicit-provider",
+      routeReason: "global-model-alias",
+      routeDecision: {
+        requestedModel: "gpt-5.6-sol",
+        selected: { provider: "acode", model: "kimi-k3", reason: "global-model-alias" },
+      },
+    });
+  });
+
+  test("splits the target only at its first slash", () => {
+    const config = aliasConfig();
+    config.modelAliases = { moonshot: "acode/vendor/family/model" };
+
+    expect(routeModel(config, "moonshot")).toMatchObject({
+      providerName: "acode",
+      modelId: "vendor/family/model",
+    });
+  });
+
+  test("resolves directly without recursively consulting another alias", () => {
+    const config = aliasConfig();
+    config.modelAliases = {
+      first: "acode/second",
+      second: "secondary/final",
+    };
+
+    expect(routeModel(config, "first")).toMatchObject({ providerName: "acode", modelId: "second" });
+  });
+
+  test("fails closed when the configured target provider is missing or disabled", () => {
+    const missing = aliasConfig();
+    missing.modelAliases = { friendly: "missing/model" };
+    expect(() => routeModel(missing, "friendly")).toThrow("targets an unknown provider: missing");
+
+    const disabled = aliasConfig();
+    disabled.providers.acode!.disabled = true;
+    disabled.modelAliases = { friendly: "acode/model" };
+    expect(() => routeModel(disabled, "friendly")).toThrow("targets a disabled provider: acode");
+  });
+
+  test("ignores provider-local modelAliases fields", () => {
+    const config = aliasConfig();
+    const provider = config.providers.acode as OcxProviderConfig & { modelAliases?: Record<string, string> };
+    provider.modelAliases = { "gpt-5.6-sol": "secondary/final" };
+
+    expect(routeModel(config, "gpt-5.6-sol")).toMatchObject({
+      providerName: "openai",
+      modelId: "gpt-5.6-sol",
+      routeKind: "native",
+    });
+  });
+
+  test("keeps combo aliases ahead of global aliases", () => {
+    const config = aliasConfig();
+    config.modelAliases = { friendly: "acode/direct" };
+    config.combos = {
+      preferred: {
+        alias: "friendly",
+        targets: [{ provider: "secondary", model: "combo-winner" }],
+      },
+    };
+
+    expect(routeModel(config, "friendly")).toMatchObject({
+      providerName: "secondary",
+      modelId: "combo-winner",
+      routeKind: "combo",
+      combo: { comboId: "preferred" },
+    });
+  });
+});

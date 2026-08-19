@@ -35,6 +35,7 @@ import {
 } from "./codex/custom-model-catalog-migration";
 import { parseAccountPriority } from "./codex/pool-rotation";
 import { COMBO_NAMESPACE, comboConfigIssues } from "./combos/types";
+import { isGlobalModelAliasName, parseGlobalModelAliasTarget } from "./routing/model-aliases";
 import { routingProfileIssues } from "./routing/profile";
 import { POLICY_NAMESPACE } from "./routing/profile-namespace";
 import {
@@ -1264,6 +1265,33 @@ const agentTaskRecoverySchema = z.object({
   cacheEntries: z.number().int().min(1).max(512).optional(),
 }).strict();
 
+const MODEL_ALIASES_RECORD_ERROR =
+  "must be a plain object mapping model aliases to provider/model targets";
+const MODEL_ALIAS_NAME_ERROR =
+  "must be a bare id without slashes, whitespace, or reserved JavaScript object keys";
+const MODEL_ALIAS_TARGET_ERROR = "must use provider/model format";
+
+const modelAliasesSchema = z.custom<Record<string, unknown>>(
+  (value): value is Record<string, unknown> => !!value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null),
+  { error: MODEL_ALIASES_RECORD_ERROR },
+).superRefine((aliases, ctx) => {
+  // Inspect raw own entries before z.record parses them; Zod omits __proto__ record keys.
+  for (const [alias, target] of Object.entries(aliases)) {
+    if (!isGlobalModelAliasName(alias)) {
+      ctx.addIssue({ code: "custom", path: [alias], message: MODEL_ALIAS_NAME_ERROR });
+    }
+    if (parseGlobalModelAliasTarget(target) === null) {
+      ctx.addIssue({ code: "custom", path: [alias], message: MODEL_ALIAS_TARGET_ERROR });
+    }
+  }
+}).pipe(z.record(
+  z.string(),
+  z.string().trim().refine(value => parseGlobalModelAliasTarget(value) !== null, MODEL_ALIAS_TARGET_ERROR),
+));
+
 const configSchema = z.object({
   port: z.number().int().min(0).max(65535).default(10100),
   managementUsageMaxReadBytes: z.number().int().positive().default(64 * 1024 * 1024),
@@ -1295,6 +1323,8 @@ const configSchema = z.object({
   ]).optional().catch(undefined),
   providers: z.record(z.string(), providerConfigSchema),
   defaultProvider: z.string().min(1).default("openai"),
+  // Invalid hand edits disable only aliases; live management writes validate strictly.
+  modelAliases: modelAliasesSchema.optional().catch(undefined),
   // A retry can be billable, so absence and malformed hand edits both stay off.
   emptyCompletionRetry: z.boolean().optional().catch(false),
   openaiProviderTierVersion: z.union([z.literal(1), z.literal(2)]).optional(),
@@ -2441,6 +2471,14 @@ function emptyCompletionRetryError(value: unknown): string | null {
   return "schema_invalid: emptyCompletionRetry: must be a boolean or omitted";
 }
 
+function modelAliasesError(value: unknown): string | null {
+  const raw = rawConfigRecord(value);
+  if (!raw || !Object.hasOwn(raw, "modelAliases") || raw.modelAliases === undefined) return null;
+  const parsed = modelAliasesSchema.safeParse(raw.modelAliases);
+  if (parsed.success) return null;
+  return schemaDiagnosticsError(parsed.error).replace("schema_invalid: ", "schema_invalid: modelAliases.");
+}
+
 /** Validate an in-memory config candidate without touching disk. Used by headless CLI import/set. */
 /**
  * Reject a loopback-listener port that collides with the proxy port (#1102).
@@ -2490,6 +2528,7 @@ export function validateConfigCandidate(value: unknown): { ok: true; config: Ocx
     ?? codexAccountPrioritiesError(value)
     ?? codexAccountPickerEnabledError(value)
     ?? emptyCompletionRetryError(value)
+    ?? modelAliasesError(value)
     ?? loopbackListenerPortError(value);
   if (boundaryError) return { ok: false, error: boundaryError };
   const result = configSchema.safeParse(value);
