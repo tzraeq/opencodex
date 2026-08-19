@@ -21,6 +21,7 @@ import Combos from "./Combos";
 import RoutingProfiles from "./RoutingProfiles";
 import CompatibilityMatrix from "./CompatibilityMatrix";
 import { ModelsTabStrip } from "./models-tab-strip";
+import { ModelAliasesPanel } from "./model-aliases-panel";
 import {
   modelsPanelDomId,
   modelsTabDomId,
@@ -1895,6 +1896,7 @@ export default function Models({ apiBase, restartEpoch = 0 }: { apiBase: string;
           </div>
         </aside>
         <section className="models-workspace-main" aria-label={t("models.workspace.mainAria")}>
+          <ModelAliasesPanel apiBase={apiBase} models={models} />
           {controlsBlock}
           {collapseControls}
           <div className="models-provider-list">

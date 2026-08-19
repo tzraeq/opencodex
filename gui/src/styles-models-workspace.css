@@ -137,6 +137,170 @@
   min-width: 0;
 }
 
+/* ── Global model aliases ────────────────────────────── */
+
+.model-aliases-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.model-aliases-header,
+.model-aliases-heading,
+.model-aliases-actions,
+.model-aliases-editor-actions,
+.model-aliases-message {
+  display: flex;
+  align-items: center;
+}
+
+.model-aliases-header {
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.model-aliases-heading {
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.model-aliases-heading > svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  color: var(--muted);
+}
+
+.model-aliases-heading h3 {
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+.model-aliases-count {
+  min-width: 20px;
+  font-family: var(--mono);
+  font-size: var(--text-caption);
+  color: var(--faint);
+  text-align: center;
+}
+
+.model-aliases-list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.model-aliases-row {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.8fr) 16px minmax(10rem, 1.2fr) 64px;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 38px;
+  border-top: 1px solid var(--border);
+}
+
+.model-aliases-value {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-aliases-target {
+  color: var(--muted);
+}
+
+.model-aliases-arrow {
+  width: 14px;
+  height: 14px;
+  color: var(--faint);
+}
+
+.model-aliases-actions {
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+.model-aliases-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  appearance: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.model-aliases-icon-button:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.model-aliases-icon-button--danger:hover:not(:disabled) {
+  color: var(--red);
+}
+
+.model-aliases-icon-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.model-aliases-icon-button > svg {
+  width: 14px;
+  height: 14px;
+}
+
+.model-aliases-empty,
+.model-aliases-message {
+  min-height: 32px;
+  color: var(--faint);
+  font-size: var(--text-caption);
+}
+
+.model-aliases-message {
+  justify-content: space-between;
+  gap: var(--space-2);
+  color: var(--red);
+}
+
+.model-aliases-editor {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.8fr) minmax(14rem, 1.2fr) auto;
+  align-items: end;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.model-aliases-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--text-caption);
+}
+
+.model-aliases-field .input {
+  width: 100%;
+  min-width: 0;
+}
+
+.model-aliases-editor-actions {
+  justify-content: flex-end;
+  gap: var(--space-2);
+  min-height: 36px;
+}
+
 /* Controls row: shadow call on the left, sub-agent mode pinned right.
    Right group does not move when the model name length changes. */
 .models-control-top-row {
@@ -499,6 +663,19 @@
   not only at the mobile drawer breakpoint.
 */
 @container models-workspace (max-width: 720px) {
+  .model-aliases-editor {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .model-aliases-editor-actions {
+    justify-content: flex-start;
+  }
+
+  .model-aliases-row {
+    grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1.2fr) 64px;
+  }
+
   .models-workspace-root {
     grid-template-columns: 1fr;
   }
@@ -523,6 +700,14 @@
 
 /* Mobile: sidebar is a drawer; still prefer rail-on-top for touch. */
 @media (max-width: 768px) {
+  .model-aliases-header {
+    align-items: flex-start;
+  }
+
+  .model-aliases-row {
+    grid-template-columns: minmax(0, 1fr) 14px minmax(0, 1.2fr) 64px;
+  }
+
   .models-workspace-root {
     grid-template-columns: 1fr;
   }
